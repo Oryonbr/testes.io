@@ -1,4 +1,4 @@
-<svg width="500" height="600" xmlns="http://www.w3.org/2000/svg">
+<svg width="500" height="700" xmlns="http://www.w3.org/2000/svg">
   <!-- Fundo -->
   <rect width="100%" height="100%" fill="#f0f0f0" rx="10" ry="10"/>
   
@@ -7,7 +7,7 @@
   <text x="250" y="40" font-family="Arial" font-size="20" fill="white" text-anchor="middle">Gerador de Redirecionamento MikroTik</text>
   
   <!-- Formulário -->
-  <rect x="10" y="70" width="480" height="400" fill="white" rx="5" ry="5" stroke="#ddd" stroke-width="1"/>
+  <rect x="10" y="70" width="480" height="500" fill="white" rx="5" ry="5" stroke="#ddd" stroke-width="1"/>
   
   <!-- Campos de entrada -->
   <text x="30" y="100" font-family="Arial" font-size="14" fill="#333">Porta Pública:</text>
@@ -35,7 +35,7 @@
     <select xmlns="http://www.w3.org/1999/xhtml" id="protocol" style="width:296px;height:30px;padding:2px;border:1px solid #ccc;border-radius:3px;">
       <option value="tcp">TCP</option>
       <option value="udp">UDP</option>
-      <option value="tcp,udp">TCP e UDP</option>
+      <option value="both">TCP e UDP (regras separadas)</option>
     </select>
   </foreignObject>
   
@@ -46,20 +46,20 @@
   
   <!-- Resultados -->
   <text x="30" y="350" font-family="Arial" font-size="14" fill="#333">RouterOS v6:</text>
-  <foreignObject x="30" y="360" width="440" height="50">
+  <foreignObject x="30" y="360" width="440" height="100">
     <textarea xmlns="http://www.w3.org/1999/xhtml" id="v6Result" readonly style="width:100%;height:100%;padding:5px;border:1px solid #ccc;border-radius:3px;font-family:monospace;resize:none;"></textarea>
   </foreignObject>
   
-  <foreignObject x="30" y="415" width="100" height="30">
+  <foreignObject x="30" y="465" width="100" height="30">
     <button xmlns="http://www.w3.org/1999/xhtml" id="copyV6" style="width:100%;height:100%;background:#27ae60;color:white;border:none;border-radius:5px;cursor:pointer;">Copiar v6</button>
   </foreignObject>
   
-  <text x="30" y="470" font-family="Arial" font-size="14" fill="#333">RouterOS v7:</text>
-  <foreignObject x="30" y="480" width="440" height="50">
+  <text x="30" y="520" font-family="Arial" font-size="14" fill="#333">RouterOS v7:</text>
+  <foreignObject x="30" y="530" width="440" height="100">
     <textarea xmlns="http://www.w3.org/1999/xhtml" id="v7Result" readonly style="width:100%;height:100%;padding:5px;border:1px solid #ccc;border-radius:3px;font-family:monospace;resize:none;"></textarea>
   </foreignObject>
   
-  <foreignObject x="30" y="535" width="100" height="30">
+  <foreignObject x="30" y="635" width="100" height="30">
     <button xmlns="http://www.w3.org/1999/xhtml" id="copyV7" style="width:100%;height:100%;background:#e74c3c;color:white;border:none;border-radius:5px;cursor:pointer;">Copiar v7</button>
   </foreignObject>
   
@@ -77,20 +77,41 @@
         return;
       }
       
-      // Comando para RouterOS v6
-      var v6Cmd = "/ip firewall nat add chain=dstnat ";
-      if (wanInterface) v6Cmd += "in-interface=" + wanInterface + " ";
-      v6Cmd += "protocol=" + protocol + " dst-port=" + publicPort + " ";
-      v6Cmd += "action=dst-nat to-address=" + privateIP + " to-port=" + privatePort;
+      // Função para gerar comandos individuais
+      function generateCommand(version, proto) {
+        var cmd = version === 6 ? "/ip firewall nat add chain=dstnat " : "/ip/firewall/nat add chain=dstnat ";
+        if (wanInterface) cmd += "in-interface=" + wanInterface + " ";
+        cmd += "protocol=" + proto + " dst-port=" + publicPort + " ";
+        cmd += "action=dst-nat to-address=" + privateIP + " to-port=" + privatePort;
+        return cmd;
+      }
       
-      // Comando para RouterOS v7
-      var v7Cmd = "/ip/firewall/nat add chain=dstnat ";
-      if (wanInterface) v7Cmd += "in-interface=" + wanInterface + " ";
-      v7Cmd += "protocol=" + protocol + " dst-port=" + publicPort + " ";
-      v7Cmd += "action=dst-nat to-address=" + privateIP + " to-port=" + privatePort;
+      // Gerar comandos para v6
+      var v6Cmds = "";
+      if (protocol === "tcp" || protocol === "both") {
+        v6Cmds += generateCommand(6, "tcp");
+      }
+      if (protocol === "both") {
+        v6Cmds += "\n\n" + generateCommand(6, "udp");
+      }
+      if (protocol === "udp") {
+        v6Cmds += generateCommand(6, "udp");
+      }
       
-      document.getElementById('v6Result').value = v6Cmd;
-      document.getElementById('v7Result').value = v7Cmd;
+      // Gerar comandos para v7
+      var v7Cmds = "";
+      if (protocol === "tcp" || protocol === "both") {
+        v7Cmds += generateCommand(7, "tcp");
+      }
+      if (protocol === "both") {
+        v7Cmds += "\n\n" + generateCommand(7, "udp");
+      }
+      if (protocol === "udp") {
+        v7Cmds += generateCommand(7, "udp");
+      }
+      
+      document.getElementById('v6Result').value = v6Cmds;
+      document.getElementById('v7Result').value = v7Cmds;
     }
     
     function copyToClipboard(id) {
