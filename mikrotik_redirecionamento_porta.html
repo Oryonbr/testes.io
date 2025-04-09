@@ -1,0 +1,107 @@
+<svg width="500" height="600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo -->
+  <rect width="100%" height="100%" fill="#f0f0f0" rx="10" ry="10"/>
+  
+  <!-- Cabeçalho -->
+  <rect x="10" y="10" width="480" height="50" fill="#2c3e50" rx="5" ry="5"/>
+  <text x="250" y="40" font-family="Arial" font-size="20" fill="white" text-anchor="middle">Gerador de Redirecionamento MikroTik</text>
+  
+  <!-- Formulário -->
+  <rect x="10" y="70" width="480" height="400" fill="white" rx="5" ry="5" stroke="#ddd" stroke-width="1"/>
+  
+  <!-- Campos de entrada -->
+  <text x="30" y="100" font-family="Arial" font-size="14" fill="#333">Porta Pública:</text>
+  <foreignObject x="150" y="85" width="300" height="30">
+    <input xmlns="http://www.w3.org/1999/xhtml" id="publicPort" type="number" style="width:290px;height:25px;padding:2px;border:1px solid #ccc;border-radius:3px;"/>
+  </foreignObject>
+  
+  <text x="30" y="140" font-family="Arial" font-size="14" fill="#333">Porta Privada:</text>
+  <foreignObject x="150" y="125" width="300" height="30">
+    <input xmlns="http://www.w3.org/1999/xhtml" id="privatePort" type="number" style="width:290px;height:25px;padding:2px;border:1px solid #ccc;border-radius:3px;"/>
+  </foreignObject>
+  
+  <text x="30" y="180" font-family="Arial" font-size="14" fill="#333">IP Privado:</text>
+  <foreignObject x="150" y="165" width="300" height="30">
+    <input xmlns="http://www.w3.org/1999/xhtml" id="privateIP" type="text" style="width:290px;height:25px;padding:2px;border:1px solid #ccc;border-radius:3px;" placeholder="192.168.1.100"/>
+  </foreignObject>
+  
+  <text x="30" y="220" font-family="Arial" font-size="14" fill="#333">Interface WAN (opcional):</text>
+  <foreignObject x="150" y="205" width="300" height="30">
+    <input xmlns="http://www.w3.org/1999/xhtml" id="wanInterface" type="text" style="width:290px;height:25px;padding:2px;border:1px solid #ccc;border-radius:3px;" placeholder="ex: ether1-wan"/>
+  </foreignObject>
+  
+  <text x="30" y="260" font-family="Arial" font-size="14" fill="#333">Protocolo:</text>
+  <foreignObject x="150" y="245" width="300" height="30">
+    <select xmlns="http://www.w3.org/1999/xhtml" id="protocol" style="width:296px;height:30px;padding:2px;border:1px solid #ccc;border-radius:3px;">
+      <option value="tcp">TCP</option>
+      <option value="udp">UDP</option>
+      <option value="tcp,udp">TCP e UDP</option>
+    </select>
+  </foreignObject>
+  
+  <!-- Botão Gerar -->
+  <foreignObject x="150" y="285" width="150" height="40">
+    <button xmlns="http://www.w3.org/1999/xhtml" id="generateBtn" style="width:100%;height:100%;background:#3498db;color:white;border:none;border-radius:5px;font-size:16px;cursor:pointer;">Gerar Comandos</button>
+  </foreignObject>
+  
+  <!-- Resultados -->
+  <text x="30" y="350" font-family="Arial" font-size="14" fill="#333">RouterOS v6:</text>
+  <foreignObject x="30" y="360" width="440" height="50">
+    <textarea xmlns="http://www.w3.org/1999/xhtml" id="v6Result" readonly style="width:100%;height:100%;padding:5px;border:1px solid #ccc;border-radius:3px;font-family:monospace;resize:none;"></textarea>
+  </foreignObject>
+  
+  <foreignObject x="30" y="415" width="100" height="30">
+    <button xmlns="http://www.w3.org/1999/xhtml" id="copyV6" style="width:100%;height:100%;background:#27ae60;color:white;border:none;border-radius:5px;cursor:pointer;">Copiar v6</button>
+  </foreignObject>
+  
+  <text x="30" y="470" font-family="Arial" font-size="14" fill="#333">RouterOS v7:</text>
+  <foreignObject x="30" y="480" width="440" height="50">
+    <textarea xmlns="http://www.w3.org/1999/xhtml" id="v7Result" readonly style="width:100%;height:100%;padding:5px;border:1px solid #ccc;border-radius:3px;font-family:monospace;resize:none;"></textarea>
+  </foreignObject>
+  
+  <foreignObject x="30" y="535" width="100" height="30">
+    <button xmlns="http://www.w3.org/1999/xhtml" id="copyV7" style="width:100%;height:100%;background:#e74c3c;color:white;border:none;border-radius:5px;cursor:pointer;">Copiar v7</button>
+  </foreignObject>
+  
+  <!-- Script -->
+  <script type="application/ecmascript">
+    function generateCommands() {
+      var publicPort = document.getElementById('publicPort').value;
+      var privatePort = document.getElementById('privatePort').value;
+      var privateIP = document.getElementById('privateIP').value;
+      var wanInterface = document.getElementById('wanInterface').value;
+      var protocol = document.getElementById('protocol').value;
+      
+      if (!publicPort || !privatePort || !privateIP) {
+        alert("Por favor, preencha pelo menos Porta Pública, Porta Privada e IP Privado");
+        return;
+      }
+      
+      // Comando para RouterOS v6
+      var v6Cmd = "/ip firewall nat add chain=dstnat ";
+      if (wanInterface) v6Cmd += "in-interface=" + wanInterface + " ";
+      v6Cmd += "protocol=" + protocol + " dst-port=" + publicPort + " ";
+      v6Cmd += "action=dst-nat to-address=" + privateIP + " to-port=" + privatePort;
+      
+      // Comando para RouterOS v7
+      var v7Cmd = "/ip/firewall/nat add chain=dstnat ";
+      if (wanInterface) v7Cmd += "in-interface=" + wanInterface + " ";
+      v7Cmd += "protocol=" + protocol + " dst-port=" + publicPort + " ";
+      v7Cmd += "action=dst-nat to-address=" + privateIP + " to-port=" + privatePort;
+      
+      document.getElementById('v6Result').value = v6Cmd;
+      document.getElementById('v7Result').value = v7Cmd;
+    }
+    
+    function copyToClipboard(id) {
+      var textarea = document.getElementById(id);
+      textarea.select();
+      document.execCommand('copy');
+      alert("Comando copiado para a área de transferência!");
+    }
+    
+    document.getElementById('generateBtn').addEventListener('click', generateCommands);
+    document.getElementById('copyV6').addEventListener('click', function() { copyToClipboard('v6Result'); });
+    document.getElementById('copyV7').addEventListener('click', function() { copyToClipboard('v7Result'); });
+  </script>
+</svg>
