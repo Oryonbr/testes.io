@@ -209,8 +209,7 @@
     <script>
         // Variável global para armazenar os dados de mapeamento
         let mappingData = [];
-        let publicIps = [];
-        let currentPublicIpIndex = 0;
+        let publicNetwork = null;
         
         function openTab(evt, tabName) {
             var i, tabcontent, tablinks;
@@ -261,7 +260,7 @@
                 
                 // Calcula o prefixo para as sub-redes privadas
                 const privateNetwork = ipNetwork(privateRange);
-                const publicNetwork = ipNetwork(publicRange);
+                publicNetwork = ipNetwork(publicRange);
                 
                 const newPrefix = privateNetwork.prefixlen + Math.log2(ratio);
                 
@@ -273,13 +272,8 @@
                     throw new Error("Rede privada muito pequena para a razão especificada");
                 }
                 
-                // Gerar lista de IPs públicos
-                publicIps = Array.from(publicNetwork.hosts());
-                currentPublicIpIndex = 0;
-                
                 return {
                     privateSubnets: privateSubnets.slice(0, ratio),
-                    publicNetwork: publicNetwork,
                     ratio: ratio
                 };
             } catch (error) {
@@ -297,7 +291,7 @@
                 document.getElementById("progressBar").style.width = "0%";
                 document.getElementById("progressBar").innerText = "0%";
                 
-                const {privateSubnets, publicNetwork} = calculateSubnets(privateRange, publicRange, ratio);
+                const {privateSubnets} = calculateSubnets(privateRange, publicRange, ratio);
                 
                 // Gerar regras
                 let rules = [];
@@ -323,15 +317,15 @@
                         finalPort = 65535;
                     }
                     
-                    // Usar o mesmo IP público para todas as sub-redes privadas
-                    const publicIp = publicNetwork.network;
+                    // Usar a rede pública completa com máscara
+                    const publicNetworkWithMask = publicNetwork.toString();
                     
                     // Adiciona jump para a subrede
                     rules.push(`/ip firewall nat add action=jump chain=cgnat comment="Jump para rede ==> ${subnet} portas=${initialPort}-${finalPort}" jump-target=${subnet} src-address=${subnet}`);
                     
                     // Adiciona regras TCP e UDP
-                    rules.push(`/ip firewall nat add chain=${subnet} comment="${subnet} ==> portas=${initialPort}-${finalPort}" protocol=tcp action=netmap to-addresses=${publicIp} to-ports=${initialPort}-${finalPort}`);
-                    rules.push(`/ip firewall nat add chain=${subnet} comment="${subnet} ==> portas=${initialPort}-${finalPort}" protocol=udp action=netmap to-addresses=${publicIp} to-ports=${initialPort}-${finalPort}`);
+                    rules.push(`/ip firewall nat add chain=${subnet} comment="${subnet} ==> portas=${initialPort}-${finalPort}" protocol=tcp action=netmap to-addresses=${publicNetworkWithMask} to-ports=${initialPort}-${finalPort}`);
+                    rules.push(`/ip firewall nat add chain=${subnet} comment="${subnet} ==> portas=${initialPort}-${finalPort}" protocol=udp action=netmap to-addresses=${publicNetworkWithMask} to-ports=${initialPort}-${finalPort}`);
                     
                     // Calcular progresso
                     const progress = Math.round(((i + 1) / privateSubnets.length) * 100);
@@ -340,20 +334,20 @@
                     
                     // Gerar mapeamento IP a IP (assíncrono para não travar a UI)
                     setTimeout(() => {
-                        generateIpMapping(subnet, publicIp, initialPort, finalPort, i, privateSubnets.length);
+                        generateIpMapping(subnet, publicNetworkWithMask, initialPort, finalPort, i, privateSubnets.length);
                     }, 0);
                     
                     initialPort = finalPort + 1;
                 }
                 
                 // Adiciona regra geral de netmap (opcional)
-                rules.push(`/ip firewall nat add chain=srcnat comment="${privateRange} ==> ${publicNetwork}" action=netmap src-address=${privateRange} to-addresses=${publicNetwork.network}`);
+                rules.push(`/ip firewall nat add chain=srcnat comment="${privateRange} ==> ${publicNetwork.toString()}" action=netmap src-address=${privateRange} to-addresses=${publicNetwork.toString()}`);
                 
                 // Exibe as regras
                 document.getElementById("rulesOutput").value = rules.join("\n");
                 
                 // Gera a visualização SVG
-                generateSvgVisualization(privateRange, publicRange, ratio, privateSubnets, publicNetwork);
+                generateSvgVisualization(privateRange, publicRange, ratio, privateSubnets);
                 
                 // Mostra a seção de output
                 document.getElementById("outputSection").style.display = "block";
@@ -364,12 +358,12 @@
             }
         }
         
-        function generateIpMapping(privateSubnet, publicIp, initialPort, finalPort, currentIndex, totalSubnets) {
+        function generateIpMapping(privateSubnet, publicNetworkWithMask, initialPort, finalPort, currentIndex, totalSubnets) {
             const privateIps = Array.from(ipNetwork(privateSubnet.toString()).hosts());
             
             privateIps.forEach((ip, idx) => {
                 mappingData.push({
-                    publicIp: publicIp,
+                    publicIp: publicNetworkWithMask,
                     portRange: `${initialPort}-${finalPort}`,
                     privateIp: ip
                 });
@@ -427,7 +421,7 @@
             document.body.removeChild(link);
         }
         
-        function generateSvgVisualization(privateRange, publicRange, ratio, privateSubnets, publicNetwork) {
+        function generateSvgVisualization(privateRange, publicRange, ratio, privateSubnets) {
             const svgWidth = 800;
             const svgHeight = 400 + (privateSubnets.length * 30);
             const container = document.getElementById("svgContainer");
@@ -459,14 +453,14 @@
                     <text x="${svgWidth/2}" y="30" font-family="Arial" font-size="20" text-anchor="middle" fill="black">Configuração CGNAT</text>
                     
                     <text x="50" y="70" font-family="Arial" font-size="16" fill="black">Rede Privada: ${privateRange}</text>
-                    <text x="50" y="90" font-family="Arial" font-size="16" fill="black">Rede Pública: ${publicRange}</text>
+                    <text x="50" y="90" font-family="Arial" font-size="16" fill="black">Rede Pública: ${publicNetwork.toString()}</text>
                     <text x="50" y="110" font-family="Arial" font-size="16" fill="black">Razão: 1:${ratio} (1 público para ${ratio} privados)</text>
                     
                     <rect x="50" y="150" width="300" height="${120 + (privateSubnets.length * 30)}" fill="#e6f7ff" stroke="#1890ff" stroke-width="2"/>
                     <text x="200" y="170" font-family="Arial" font-size="14" text-anchor="middle" fill="black">Rede Privada</text>
                     
                     <rect x="450" y="150" width="300" height="100" fill="#f6ffed" stroke="#52c41a" stroke-width="2"/>
-                    <text x="600" y="170" font-family="Arial" font-size="14" text-anchor="middle" fill="black">Rede Pública: ${publicNetwork.network}</text>
+                    <text x="600" y="170" font-family="Arial" font-size="14" text-anchor="middle" fill="black">Rede Pública: ${publicNetwork.toString()}</text>
             `;
             
             // Desenhar sub-redes privadas
@@ -482,7 +476,7 @@
                     <polygon points="450,200 440,195 440,205" fill="#ff4d4f"/>
                     
                     <text x="350" y="${y+12}" font-family="Arial" font-size="10" fill="#ff4d4f">Portas: ${portInfo[i].initial}-${portInfo[i].final} (${portInfo[i].count})</text>
-                    <text x="350" y="${y+24}" font-family="Arial" font-size="10" fill="#ff4d4f">Mapeado para: ${publicNetwork.network}</text>
+                    <text x="350" y="${y+24}" font-family="Arial" font-size="10" fill="#ff4d4f">Mapeado para: ${publicNetwork.toString()}</text>
                 `;
             }
             
