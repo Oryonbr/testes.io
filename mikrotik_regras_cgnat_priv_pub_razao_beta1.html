@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Regras CGNAT para MikroTik</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .input-section {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .button-secondary {
+            background: #2196F3;
+        }
+        .button-secondary:hover {
+            background: #0b7dda;
+        }
+        .output-section {
+            margin-top: 30px;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 10px 16px;
+            transition: 0.3s;
+            color: black;
+            margin: 0;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background: white;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        .svg-container {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+        .button-group {
+            margin-top: 15px;
+        }
+        .progress-container {
+            width: 100%;
+            background-color: #f1f1f1;
+            border-radius: 4px;
+            margin: 15px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 24px;
+            background-color: #4CAF50;
+            border-radius: 4px;
+            text-align: center;
+            line-height: 24px;
+            color: white;
+            width: 0%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gerador de Regras CGNAT para MikroTik</h1>
+        
+        <div class="input-section">
+            <div class="form-group">
+                <label for="privateRange">Rede Privada (ex: 100.66.16.0/21):</label>
+                <input type="text" id="privateRange" value="100.66.16.0/21">
+            </div>
+            
+            <div class="form-group">
+                <label for="publicRange">Rede Pública (ex: 177.129.97.64/26):</label>
+                <input type="text" id="publicRange" value="177.129.97.64/26">
+            </div>
+            
+            <div class="form-group">
+                <label for="ratio">Razão (1 público para quantos privados?):</label>
+                <select id="ratio">
+                    <option value="2">1:2</option>
+                    <option value="4">1:4</option>
+                    <option value="8">1:8</option>
+                    <option value="16">1:16</option>
+                    <option value="32" selected>1:32</option>
+                    <option value="64">1:64</option>
+                    <option value="128">1:128</option>
+                </select>
+            </div>
+            
+            <button onclick="generateRules()">Gerar Regras</button>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+        </div>
+        
+        <div class="output-section" id="outputSection" style="display: none;">
+            <div class="tab">
+                <button class="tablinks active" onclick="openTab(event, 'rulesTab')">Regras</button>
+                <button class="tablinks" onclick="openTab(event, 'visualizationTab')">Visualização</button>
+                <button class="tablinks" onclick="openTab(event, 'mappingTab')">Mapeamento</button>
+            </div>
+            
+            <div id="rulesTab" class="tabcontent" style="display: block;">
+                <h3>Regras para MikroTik</h3>
+                <textarea id="rulesOutput" readonly></textarea>
+                <div class="button-group">
+                    <button onclick="copyToClipboard('rulesOutput')">Copiar Regras</button>
+                    <button class="button-secondary" onclick="downloadRules()">Baixar Regras como TXT</button>
+                </div>
+            </div>
+            
+            <div id="visualizationTab" class="tabcontent">
+                <h3>Visualização do Mapeamento CGNAT</h3>
+                <div class="svg-container" id="svgContainer"></div>
+            </div>
+            
+            <div id="mappingTab" class="tabcontent">
+                <h3>Mapeamento Completo</h3>
+                <textarea id="mappingOutput" readonly></textarea>
+                <div class="button-group">
+                    <button onclick="copyToClipboard('mappingOutput')">Copiar Mapeamento</button>
+                    <button class="button-secondary" onclick="exportToCSV()">Exportar para CSV</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variável global para armazenar os dados de mapeamento
+        let mappingData = [];
+        let publicIps = [];
+        let currentPublicIpIndex = 0;
+        
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        
+        function copyToClipboard(elementId) {
+            var copyText = document.getElementById(elementId);
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            document.execCommand("copy");
+            alert("Conteúdo copiado para a área de transferência!");
+        }
+        
+        function downloadRules() {
+            const rules = document.getElementById("rulesOutput").value;
+            const blob = new Blob([rules], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'regras-cgnat.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function calculateSubnets(privateRange, publicRange, ratio) {
+            try {
+                // Validação básica dos inputs
+                if (!privateRange || !publicRange || !ratio) {
+                    throw new Error("Todos os campos são obrigatórios");
+                }
+                
+                // Verifica se o ratio é potência de 2
+                if (![2,4,8,16,32,64,128].includes(parseInt(ratio))) {
+                    throw new Error("Razão deve ser potência de 2 (2,4,8,16,32,64,128)");
+                }
+                
+                // Calcula o prefixo para as sub-redes privadas
+                const privateNetwork = ipNetwork(privateRange);
+                const publicNetwork = ipNetwork(publicRange);
+                
+                const newPrefix = privateNetwork.prefixlen + Math.log2(ratio);
+                
+                // Divide a rede privada em sub-redes
+                const privateSubnets = privateNetwork.subnets(newPrefix);
+                
+                // Verifica se temos sub-redes suficientes
+                if (privateSubnets.length < ratio) {
+                    throw new Error("Rede privada muito pequena para a razão especificada");
+                }
+                
+                // Gerar lista de IPs públicos
+                publicIps = Array.from(publicNetwork.hosts());
+                currentPublicIpIndex = 0;
+                
+                return {
+                    privateSubnets: privateSubnets.slice(0, ratio),
+                    publicNetwork: publicNetwork,
+                    ratio: ratio
+                };
+            } catch (error) {
+                throw error;
+            }
+        }
+        
+        function generateRules() {
+            const privateRange = document.getElementById("privateRange").value.trim();
+            const publicRange = document.getElementById("publicRange").value.trim();
+            const ratio = parseInt(document.getElementById("ratio").value);
+            
+            try {
+                document.getElementById("progressContainer").style.display = "block";
+                document.getElementById("progressBar").style.width = "0%";
+                document.getElementById("progressBar").innerText = "0%";
+                
+                const {privateSubnets, publicNetwork} = calculateSubnets(privateRange, publicRange, ratio);
+                
+                // Gerar regras
+                let rules = [];
+                mappingData = []; // Resetar dados de mapeamento
+                
+                // Adiciona a rede privada à address-list
+                rules.push(`/ip firewall address-list add list=rede-privada-para-cgnat address=${privateRange}`);
+                
+                // Adiciona jump para CGNAT
+                rules.push(`/ip firewall nat add action=jump chain=srcnat comment="Jump ==> CGNAT" jump-target=cgnat src-address-list=rede-privada-para-cgnat`);
+                
+                // Calcula a divisão de portas
+                const totalPorts = 65535 - 1024 + 1;  // 64.512 portas no total
+                const portsPerSubnet = Math.floor(totalPorts / ratio);
+                let initialPort = 1024;
+                
+                // Para cada sub-rede privada
+                for (let i = 0; i < privateSubnets.length; i++) {
+                    const subnet = privateSubnets[i];
+                    let finalPort = initialPort + portsPerSubnet - 1;
+                    
+                    if (i === privateSubnets.length - 1) {
+                        finalPort = 65535;
+                    }
+                    
+                    // Usar o mesmo IP público para todas as sub-redes privadas
+                    const publicIp = publicNetwork.network;
+                    
+                    // Adiciona jump para a subrede
+                    rules.push(`/ip firewall nat add action=jump chain=cgnat comment="Jump para rede ==> ${subnet} portas=${initialPort}-${finalPort}" jump-target=${subnet} src-address=${subnet}`);
+                    
+                    // Adiciona regras TCP e UDP
+                    rules.push(`/ip firewall nat add chain=${subnet} comment="${subnet} ==> portas=${initialPort}-${finalPort}" protocol=tcp action=netmap to-addresses=${publicIp} to-ports=${initialPort}-${finalPort}`);
+                    rules.push(`/ip firewall nat add chain=${subnet} comment="${subnet} ==> portas=${initialPort}-${finalPort}" protocol=udp action=netmap to-addresses=${publicIp} to-ports=${initialPort}-${finalPort}`);
+                    
+                    // Calcular progresso
+                    const progress = Math.round(((i + 1) / privateSubnets.length) * 100);
+                    document.getElementById("progressBar").style.width = `${progress}%`;
+                    document.getElementById("progressBar").innerText = `${progress}%`;
+                    
+                    // Gerar mapeamento IP a IP (assíncrono para não travar a UI)
+                    setTimeout(() => {
+                        generateIpMapping(subnet, publicIp, initialPort, finalPort, i, privateSubnets.length);
+                    }, 0);
+                    
+                    initialPort = finalPort + 1;
+                }
+                
+                // Adiciona regra geral de netmap (opcional)
+                rules.push(`/ip firewall nat add chain=srcnat comment="${privateRange} ==> ${publicNetwork}" action=netmap src-address=${privateRange} to-addresses=${publicNetwork.network}`);
+                
+                // Exibe as regras
+                document.getElementById("rulesOutput").value = rules.join("\n");
+                
+                // Gera a visualização SVG
+                generateSvgVisualization(privateRange, publicRange, ratio, privateSubnets, publicNetwork);
+                
+                // Mostra a seção de output
+                document.getElementById("outputSection").style.display = "block";
+                
+            } catch (error) {
+                alert(`Erro: ${error.message}`);
+                document.getElementById("progressContainer").style.display = "none";
+            }
+        }
+        
+        function generateIpMapping(privateSubnet, publicIp, initialPort, finalPort, currentIndex, totalSubnets) {
+            const privateIps = Array.from(ipNetwork(privateSubnet.toString()).hosts());
+            
+            privateIps.forEach((ip, idx) => {
+                mappingData.push({
+                    publicIp: publicIp,
+                    portRange: `${initialPort}-${finalPort}`,
+                    privateIp: ip
+                });
+                
+                // Atualizar progresso
+                if (idx === privateIps.length - 1 && currentIndex === totalSubnets - 1) {
+                    // Último IP da última sub-rede
+                    updateMappingOutput();
+                    document.getElementById("progressContainer").style.display = "none";
+                }
+            });
+        }
+        
+        function updateMappingOutput() {
+            let mappingText = "IP Público;Faixa de Portas;IP Privado\n";
+            
+            // Ordenar por IP privado
+            mappingData.sort((a, b) => {
+                const ipA = a.privateIp.split('.').map(Number);
+                const ipB = b.privateIp.split('.').map(Number);
+                
+                for (let i = 0; i < 4; i++) {
+                    if (ipA[i] !== ipB[i]) {
+                        return ipA[i] - ipB[i];
+                    }
+                }
+                return 0;
+            });
+            
+            for (const item of mappingData) {
+                mappingText += `${item.publicIp};${item.portRange};${item.privateIp}\n`;
+            }
+            
+            document.getElementById("mappingOutput").value = mappingText;
+        }
+        
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            // Cabeçalho
+            csvContent += "IP Público,Faixa de Portas,IP Privado\n";
+            
+            // Dados
+            for (const item of mappingData) {
+                csvContent += `${item.publicIp},${item.portRange},${item.privateIp}\n`;
+            }
+            
+            // Criar link de download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "mapeamento_cgnat.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function generateSvgVisualization(privateRange, publicRange, ratio, privateSubnets, publicNetwork) {
+            const svgWidth = 800;
+            const svgHeight = 400 + (privateSubnets.length * 30);
+            const container = document.getElementById("svgContainer");
+            
+            // Calcula portas por sub-rede
+            const totalPorts = 65535 - 1024 + 1;
+            const portsPerSubnet = Math.floor(totalPorts / ratio);
+            let initialPort = 1024;
+            let portInfo = [];
+            
+            for (let i = 0; i < privateSubnets.length; i++) {
+                let finalPort = initialPort + portsPerSubnet - 1;
+                if (i === privateSubnets.length - 1) {
+                    finalPort = 65535;
+                }
+                
+                portInfo.push({
+                    initial: initialPort,
+                    final: finalPort,
+                    count: finalPort - initialPort + 1
+                });
+                initialPort = finalPort + 1;
+            }
+            
+            let svgContent = `
+                <svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="100%" height="100%" fill="#f0f0f0"/>
+                    
+                    <text x="${svgWidth/2}" y="30" font-family="Arial" font-size="20" text-anchor="middle" fill="black">Configuração CGNAT</text>
+                    
+                    <text x="50" y="70" font-family="Arial" font-size="16" fill="black">Rede Privada: ${privateRange}</text>
+                    <text x="50" y="90" font-family="Arial" font-size="16" fill="black">Rede Pública: ${publicRange}</text>
+                    <text x="50" y="110" font-family="Arial" font-size="16" fill="black">Razão: 1:${ratio} (1 público para ${ratio} privados)</text>
+                    
+                    <rect x="50" y="150" width="300" height="${120 + (privateSubnets.length * 30)}" fill="#e6f7ff" stroke="#1890ff" stroke-width="2"/>
+                    <text x="200" y="170" font-family="Arial" font-size="14" text-anchor="middle" fill="black">Rede Privada</text>
+                    
+                    <rect x="450" y="150" width="300" height="100" fill="#f6ffed" stroke="#52c41a" stroke-width="2"/>
+                    <text x="600" y="170" font-family="Arial" font-size="14" text-anchor="middle" fill="black">Rede Pública: ${publicNetwork.network}</text>
+            `;
+            
+            // Desenhar sub-redes privadas
+            for (let i = 0; i < privateSubnets.length; i++) {
+                const subnet = privateSubnets[i];
+                const y = 190 + i * 30;
+                
+                svgContent += `
+                    <rect x="70" y="${y}" width="260" height="25" fill="#d9e8ff" stroke="#69b1ff" stroke-width="1"/>
+                    <text x="80" y="${y+17}" font-family="Arial" font-size="12" fill="black">${subnet}</text>
+                    
+                    <line x1="330" y1="${y+12}" x2="450" y2="200" stroke="#ff4d4f" stroke-width="2"/>
+                    <polygon points="450,200 440,195 440,205" fill="#ff4d4f"/>
+                    
+                    <text x="350" y="${y+12}" font-family="Arial" font-size="10" fill="#ff4d4f">Portas: ${portInfo[i].initial}-${portInfo[i].final} (${portInfo[i].count})</text>
+                    <text x="350" y="${y+24}" font-family="Arial" font-size="10" fill="#ff4d4f">Mapeado para: ${publicNetwork.network}</text>
+                `;
+            }
+            
+            svgContent += `</svg>`;
+            
+            container.innerHTML = svgContent;
+        }
+        
+        // Funções auxiliares para manipulação de redes IP
+        function ipNetwork(cidr) {
+            const [ip, prefix] = cidr.split('/');
+            const ipParts = ip.split('.').map(Number);
+            const prefixLen = parseInt(prefix);
+            
+            return {
+                network: ip,
+                prefixlen: prefixLen,
+                toString: function() { return `${this.network}/${this.prefixlen}`; },
+                hosts: function*() {
+                    const networkMask = (-1 << (32 - this.prefixlen)) >>> 0;
+                    const broadcast = (ipToLong(this.network) | ~networkMask) >>> 0;
+                    let current = ipToLong(this.network) + 1;
+                    
+                    while (current < broadcast) {
+                        yield longToIp(current);
+                        current++;
+                    }
+                },
+                subnets: function(newPrefix) {
+                    const subnets = [];
+                    const subnetCount = Math.pow(2, newPrefix - this.prefixlen);
+                    const increment = Math.pow(2, 32 - newPrefix);
+                    
+                    for (let i = 0; i < subnetCount; i++) {
+                        const newIp = longToIp(ipToLong(this.network) + i * increment);
+                        subnets.push({
+                            network: newIp,
+                            prefixlen: newPrefix,
+                            toString: function() { return `${this.network}/${this.prefixlen}`; }
+                        });
+                    }
+                    return subnets;
+                }
+            };
+        }
+        
+        function ipToLong(ip) {
+            return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+        }
+        
+        function longToIp(long) {
+            return [
+                (long >>> 24) & 0xff,
+                (long >>> 16) & 0xff,
+                (long >>> 8) & 0xff,
+                long & 0xff
+            ].join('.');
+        }
+    </script>
+</body>
+</html>
