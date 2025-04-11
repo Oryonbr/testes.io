@@ -29,7 +29,7 @@ As regras geradas seguem o seguinte formato:
    /ip firewall address-list add address=A.B.C.D/E list=CGNAT-X.X.X.X/Y
 
 3. Address-lists padrão para redes locais:
-   /ip firewall address-list add address=10.0.0.0/8 list=no-hexa-cgnat
+   /ip firewall address-list add address=10.0.0.0/8 list=no-wfp-cgnat
    ...
 
 4. Configurações de firewall e sistema:
@@ -38,8 +38,8 @@ As regras geradas seguem o seguinte formato:
 
 5. Regras de jump e netmap para TCP, UDP e outros protocolos:
    /ip firewall nat add action=jump chain=srcnat comment=JUMP-CGNAT jump-target=CGNAT src-address=100.64.0.0/10
-   /ip firewall nat add action=jump chain=CGNAT comment="hexa-cgnat-X.X.X.X/Y (jump --> tcp)" ...
-   /ip firewall nat add action=netmap chain="hexa-cgnat-X.X.X.X/Y (jump --> tcp)" ...
+   /ip firewall nat add action=jump chain=CGNAT comment="wfp-cgnat-X.X.X.X/Y (jump --> tcp)" ...
+   /ip firewall nat add action=netmap chain="wfp-cgnat-X.X.X.X/Y (jump --> tcp)" ...
 
 VISUALIZAÇÕES:
 O aplicativo também gera:
