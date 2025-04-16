@@ -1,4 +1,3 @@
-<script>
 	/**
  * Autor: Bruno Mendes dos Santos
  * Data de Criação: 2025-04-16
@@ -418,4 +417,4 @@
             const portsPerPrivateIp = Math.floor((65535 - 1024) / ratio);
             document.getElementById("ratioInfo").textContent = `Cada IP privado terá aproximadamente ${portsPerPrivateIp.toLocaleString()} portas disponíveis`;
         });
-    </script>
+
