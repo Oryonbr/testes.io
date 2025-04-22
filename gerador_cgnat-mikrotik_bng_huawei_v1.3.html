@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Regras CGNAT para MikroTik</title>
-    <!-- Versão Beta 12.1 v1.1 - add bng Huawei -->
+    <title>Gerador Pools para BNG Huawei e Regras CGNAT Mikrotik v1.3</title>
+    <!-- Versão Beta v1.3 - com ordem de pool bng opcional, mapeamento completo -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -167,7 +167,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Gerador de Regras CGNAT para MikroTik</h1>
+        <h1>Gerador Pools para BNG Huawei e Regras CGNAT Mikrotik v1.2</h1>
         <div class="input-section">
             <div class="form-group">
     <label for="privateRange">Rede(s) Privada(s) (separadas por espaço, ex: 100.67.0.0/21 100.67.8.0/21):</label>
@@ -192,7 +192,16 @@
                 <div id="ratioInfo" class="ratio-info">Cada IP privado terá aproximadamente 2.016 portas disponíveis</div>
             <div id="warningBox" class="warning-box" style="display: none;"></div>
             </div>
-            <div id="errorBox" class="error-box" style="display: none;"></div>
+            
+			<div class="form-group">
+    <label>
+        <input type="checkbox" id="balancePoolsCheckbox" checked> 
+        Criar pools privados no BNG alternando entre as redes publicas
+    </label>
+    <div class="info-text">Obs. Altera apenas a ordem de criação no BNG, as associações são as mesmas entre blocos privados e publicos </div>
+</div>
+
+			<div id="errorBox" class="error-box" style="display: none;"></div>
             <button id="generateButton" onclick="generateRules()">Gerar</button>
         </div>
         <div class="output-section" id="outputSection" style="display: none;">
@@ -204,11 +213,12 @@
 				</div>
             <div id="rulesTab" class="tabcontent" style="display: block;">
                 <h3>Comandos para CGNAT MikroTik</h3>
-                <textarea id="rulesOutput" readonly></textarea>
-                <div class="button-group">
+				<div class="button-group">
                     <button onclick="copyToClipboard('rulesOutput')">Copiar Regras</button>
                     <button class="button-secondary" onclick="downloadRules()">Baixar Regras como TXT</button>
                 </div>
+                <textarea id="rulesOutput" readonly></textarea>
+                
             </div>
             <div id="subnetMappingTab" class="tabcontent">
                 <h3>Mapeamento por Sub-Rede</h3>
@@ -216,31 +226,31 @@
             </div>
             <div id="perIPTab" class="tabcontent">
                 <h3>Mapeamento por IP</h3>
-                <div class="svg-container" id="perIPSvgContainer"></div>
-                <div class="button-group">
+				<div class="button-group">
                     <button onclick="downloadPerIPMapping()">Baixar Mapeamento por IP</button>
                 </div>
-				
-            </div>
+                <div class="svg-container" id="perIPSvgContainer"></div>
+                
+			</div>
 			<div id="bngHuaweiTab" class="tabcontent">
 				<h3>Comandos para BNG Huawei</h3>
-				<textarea id="bngHuaweiOutput" readonly></textarea>
 				<div class="button-group">
 					<button onclick="copyToClipboard('bngHuaweiOutput')">Copiar Comandos</button>
 					<button class="button-secondary" onclick="downloadBNGCommands()">Baixar Comandos como TXT</button>
 				</div>
+				<textarea id="bngHuaweiOutput" readonly></textarea>
 			</div>
         </div></div>
     </div>
     <script>
 	/**
  * Autor: Bruno Mendes dos Santos
- * Data de Criação: 2025-04-16
+ * Data de Criação: 2025-04-22
  * Descrição: Funções para Geração de regras CGNAT para Mirktoik e relatório de mapeamento
  *
  * Última Modificação por: Bruno Mendes dos Santos
  * e-mail:oryon.br@gmail.com
- * Data da Última Modificação: 2025-04-16
+ * Data da Última Modificação: 2025-04-22
  */
         // Variáveis globais
         let mappingData = [];
@@ -463,63 +473,93 @@ function generateRules() {
     }
 }
 
-// Esta função deve ser adicionada ao seu código JavaScript
 function generateBNGHuaweiCommands(privateRanges, publicRanges, ratio) {
     try {
-        // Utiliza a mesma lógica de cálculo de subredes do CGNAT
+        const isBalanced = document.getElementById('balancePoolsCheckbox').checked;
         const privateNetworks = privateRanges.trim().split(/\s+/).map(range => ipNetwork(range));
         const publicNetworks = publicRanges.trim().split(/\s+/).map(range => ipNetwork(range));
-        
         let bngCommands = [];
         let ipPoolCommands = [];
-        
-        // Para cada rede privada
-        privateNetworks.forEach((privateNetwork, networkIndex) => {
-            // Calcula o novo prefixo para as subredes
-            const newPrefix = privateNetwork.prefixlen + Math.log2(ratio);
+
+        // Calcula o número de subnets por rede privada baseado na razão
+        const calculateSubnetsPerPrivate = (privateNet, ratio) => {
+            const newPrefix = privateNet.prefixlen + Math.log2(ratio);
+            return privateNet.subnets(newPrefix);
+        };
+
+        if (isBalanced) {
+            // Calcula o total de subnets em todas as redes privadas
+            const allSubnets = privateNetworks.map(privNet => {
+                return calculateSubnetsPerPrivate(privNet, ratio);
+            });
             
-            // Divide a rede privada em subredes
-            const subnets = privateNetwork.subnets(newPrefix);
+            // Determina o máximo de subnets em uma rede privada
+            const maxSubnetsCount = Math.max(...allSubnets.map(subnet => subnet.length));
             
-            // Gera comandos para cada subrede
-            subnets.slice(0, ratio).forEach((subnet) => {
+            // Cria uma lista balanceada alternando entre redes públicas
+            let subnetsToProcess = [];
+            for (let i = 0; i < maxSubnetsCount; i++) {
+                for (let netIdx = 0; netIdx < privateNetworks.length; netIdx++) {
+                    const subnets = allSubnets[netIdx];
+                    if (i < subnets.length) {
+                        subnetsToProcess.push({
+                            pub: publicNetworks[netIdx],
+                            subnet: subnets[i]
+                        });
+                    }
+                }
+            }
+            
+            // Processa todas as subnets na ordem balanceada
+            subnetsToProcess.forEach(({pub, subnet}) => {
                 const networkAddress = subnet.toString().split('/')[0];
                 const prefix = subnet.prefixlen;
                 const mask = prefixToNetmask(prefix);
-                
-                // Calcula o primeiro IP da rede (gateway)
                 const networkLong = ipToLong(networkAddress);
                 const firstIpLong = networkLong + 1;
                 const firstIp = longToIp(firstIpLong);
-                
-                // Calcula o endereço de broadcast
-                const networkMask = (-1 << (32 - prefix)) >>> 0;
-                const broadcastLong = networkLong | (~networkMask >>> 0);
+                const broadcastLong = networkLong | (~(((-1 << (32 - prefix)) >>> 0)) >>> 0);
                 const broadcast = longToIp(broadcastLong);
                 
-                // Adiciona comandos no formato especificado
                 bngCommands.push(`ip pool cgnat-${networkAddress} bas local`);
                 bngCommands.push(`gateway ${firstIp} ${mask}`);
                 bngCommands.push(`section 10 ${networkAddress} ${broadcast}`);
                 bngCommands.push("");
-                
-                // Adiciona comando ip-pool
                 ipPoolCommands.push(`ip-pool cgnat-${networkAddress}`);
             });
-        });
-        
-        // Adiciona uma linha em branco entre os dois grupos de comandos
+        } else {
+            // Comportamento original sem balanceamento
+            privateNetworks.forEach((privNet, idx) => {
+                const subnets = calculateSubnetsPerPrivate(privNet, ratio);
+                const pub = publicNetworks[idx];
+                
+                subnets.forEach(subnet => {
+                    const networkAddress = subnet.toString().split('/')[0];
+                    const prefix = subnet.prefixlen;
+                    const mask = prefixToNetmask(prefix);
+                    const networkLong = ipToLong(networkAddress);
+                    const firstIpLong = networkLong + 1;
+                    const firstIp = longToIp(firstIpLong);
+                    const broadcastLong = networkLong | (~(((-1 << (32 - prefix)) >>> 0)) >>> 0);
+                    const broadcast = longToIp(broadcastLong);
+                    
+                    bngCommands.push(`ip pool cgnat-${networkAddress} bas local`);
+                    bngCommands.push(`gateway ${firstIp} ${mask}`);
+                    bngCommands.push(`section 10 ${networkAddress} ${broadcast}`);
+                    bngCommands.push("");
+                    ipPoolCommands.push(`ip-pool cgnat-${networkAddress}`);
+                });
+            });
+        }
+
         if (ipPoolCommands.length > 0) {
-            //bngCommands.push("# Comandos ip-pool");
             bngCommands = bngCommands.concat(ipPoolCommands);
         }
-        
-        // Atualiza o conteúdo na textarea
+
         document.getElementById("bngHuaweiOutput").value = bngCommands.join("\n");
-        console.log("Comandos BNG gerados:", bngCommands.length);
     } catch (error) {
-        console.error("Erro ao gerar comandos BNG Huawei:", error);
-        alert("Erro ao gerar comandos BNG Huawei: " + error.message);
+        console.error("Erro:", error);
+        alert("Erro ao gerar comandos BNG: " + error.message);
     }
 }
 // Função para converter prefixo CIDR para máscara de sub-rede
@@ -548,35 +588,43 @@ function downloadBNGCommands() {
     URL.revokeObjectURL(url);
 }
 
-// IMPORTANTE: Modifique a função generateRules() existente para incluir esta chamada
-// Adicione esta linha logo antes de document.getElementById("outputSection").style.display = "block";
-// generateBNGHuaweiCommands(privateRanges);
+//alterado na beta1.3 para incluir IP de network e brodcast
 
         function generateIpMapping(privateSubnet, publicNetworkStr, initialPort, finalPort) {
-            const publicNetwork = ipNetwork(publicNetworkStr);
-            const publicIps = Array.from(publicNetwork.hosts());
-            let publicIpIndex = 0;
-            
-            // Listar todos os IPs da sub-rede privada
-            const privateIps = Array.from(ipNetwork(privateSubnet.toString()).hosts());
-            
-            privateIps.forEach(privateIp => {
-                if (publicIpIndex >= publicIps.length) {
-                    publicIpIndex = 0; // Volta ao primeiro IP público se acabarem
-                }
-                
-                perIPMappingData.push({
-                    privateIp: privateIp,
-                    publicIp: publicIps[publicIpIndex],
-                    portRange: `${initialPort}-${finalPort}`
-                });
-                
-                publicIpIndex++;
-            });
-        }
+			const publicNetwork = ipNetwork(publicNetworkStr);
+			
+			// Listar TODOS os IPs da sub-rede pública (incluindo network e broadcast)
+			const publicIps = [];
+			for (let ipLong = publicNetwork.networkLong; ipLong <= publicNetwork.broadcastLong; ipLong++) {
+				publicIps.push(longToIp(ipLong));
+			}
+			
+			// Listar TODOS os IPs da sub-rede privada (incluindo network e broadcast)
+			const privateSubnetObj = ipNetwork(privateSubnet.toString());
+			const privateIps = [];
+			for (let ipLong = privateSubnetObj.networkLong; ipLong <= privateSubnetObj.broadcastLong; ipLong++) {
+				privateIps.push(longToIp(ipLong));
+			}
+			
+			let publicIpIndex = 0;
+			
+			privateIps.forEach(privateIp => {
+				if (publicIpIndex >= publicIps.length) {
+					publicIpIndex = 0; // Reinicia o ciclo dos IPs públicos
+				}
+				
+				perIPMappingData.push({
+					privateIp: privateIp,
+					publicIp: publicIps[publicIpIndex],
+					portRange: `${initialPort}-${finalPort}`
+				});
+				
+				publicIpIndex++;
+			});
+		}
         
         function generatePerIPSvgVisualization() {
-            const svgWidth = 1000;
+            const svgWidth = 10000;
             const rowHeight = 30;
             const headerHeight = 40;
             const titleHeight = 120;
@@ -597,7 +645,7 @@ function downloadBNGCommands() {
                     <!-- Cabeçalho da tabela -->
                     <rect x="50" y="${titleHeight}" width="900" height="${headerHeight}" fill="#4CAF50" rx="5"/>
                     <text x="200" y="${titleHeight + 25}" font-family="Arial" font-size="14" text-anchor="middle" fill="white">IP Privado</text>
-                    <text x="500" y="${titleHeight + 25}" font-family="Arial" font-size="14" text-anchor="middle" fill="white">IP Público</text>
+                    <text x="500" y="${titleHeight + 25}" font-family="Arial" font-size="14" text-anchor="middle" fill="white">IP Publico</text>
                     <text x="800" y="${titleHeight + 25}" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Faixa de Portas</text>
             `;
             
@@ -685,41 +733,45 @@ function downloadBNGCommands() {
         }
         
         // Funções auxiliares para manipulação de redes IP
-        function ipNetwork(cidr) {
-            const [ip, prefix] = cidr.split('/');
-            const ipParts = ip.split('.').map(Number);
-            const prefixLen = parseInt(prefix);
-            if (isNaN(prefixLen) || prefixLen < 0 || prefixLen > 32) {
-                throw new Error("Máscara de rede inválida");
-            }
-            
-            // Calcula o endereço de rede em formato longo
-            const ipLong = ipToLong(ip);
-            const networkMask = (-1 << (32 - prefixLen)) >>> 0;
-            const networkLong = ipLong & networkMask;
-            const broadcastLong = networkLong | (~networkMask >>> 0);
-            
-            return {
-                network: ip,
-                prefixlen: prefixLen,
-                toString: function() { return `${this.network}/${this.prefixlen}`; },
-                hosts: function*() {
-                    for (let current = networkLong + 1; current < broadcastLong; current++) {
-                        yield longToIp(current);
-                    }
-                },
-                subnets: function(newPrefix) {
-                    const subnets = [];
-                    const subnetCount = Math.pow(2, newPrefix - this.prefixlen);
-                    const increment = Math.pow(2, 32 - newPrefix);
-                    for (let i = 0; i < subnetCount; i++) {
-                        const newIp = longToIp(networkLong + i * increment);
-                        subnets.push(ipNetwork(`${newIp}/${newPrefix}`));
-                    }
-                    return subnets;
-                }
-            };
-        }
+		//alterado na beta1.3 para incluir IP de network e brodcast
+		function ipNetwork(cidr) {
+			const [ip, prefix] = cidr.split('/');
+			const ipParts = ip.split('.').map(Number);
+			const prefixLen = parseInt(prefix);
+			if (isNaN(prefixLen) || prefixLen < 0 || prefixLen > 32) {
+				throw new Error("Máscara de rede inválida");
+			}
+			
+			// Calcula o endereço de rede em formato longo
+			const ipLong = ipToLong(ip);
+			const networkMask = (-1 << (32 - prefixLen)) >>> 0;
+			const networkLong = ipLong & networkMask;
+			const broadcastLong = networkLong | (~networkMask >>> 0);
+			
+			return {
+				network: longToIp(networkLong), // Endereço de rede correto
+				prefixlen: prefixLen,
+				networkLong: networkLong,
+				broadcastLong: broadcastLong,
+				toString: function() { return `${this.network}/${this.prefixlen}`; },
+				hosts: function*() {
+					for (let current = this.networkLong + 1; current < this.broadcastLong; current++) {
+						yield longToIp(current);
+					}
+				},
+				subnets: function(newPrefix) {
+					const subnets = [];
+					const subnetCount = Math.pow(2, newPrefix - this.prefixlen);
+					const increment = Math.pow(2, 32 - newPrefix);
+					for (let i = 0; i < subnetCount; i++) {
+						const newIpLong = this.networkLong + i * increment;
+						const newIp = longToIp(newIpLong);
+						subnets.push(ipNetwork(`${newIp}/${newPrefix}`));
+					}
+					return subnets;
+				}
+			};
+		}
         
         function ipToLong(ip) {
             const octets = ip.split('.').map(Number);
