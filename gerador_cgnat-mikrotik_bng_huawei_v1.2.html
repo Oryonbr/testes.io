@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Regras CGNAT para MikroTik</title>
+    <title>Gerador Pools para BNG Huawei e Regras CGNAT Mikrotik v1.2</title>
     <!-- Versão Beta v1.2 - com ordem de pool bng opcional -->
     <style>
         body {
@@ -167,7 +167,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Gerador de Regras CGNAT para MikroTik</h1>
+        <h1>Gerador Pools para BNG Huawei e Regras CGNAT Mikrotik v1.2</h1>
         <div class="input-section">
             <div class="form-group">
     <label for="privateRange">Rede(s) Privada(s) (separadas por espaço, ex: 100.67.0.0/21 100.67.8.0/21):</label>
@@ -196,9 +196,9 @@
 			<div class="form-group">
     <label>
         <input type="checkbox" id="balancePoolsCheckbox" checked> 
-        Balancear distribuição entre pools públicos
+        Criar pools privados no BNG alternando entre as redes publicas
     </label>
-    <div class="info-text">Cria pools alternando entre ranges públicos para distribuição equilibrada</div>
+    <div class="info-text">Obs. Altera apenas a ordem de criação no BNG, as associações são as mesmas entre blocos privados e publicos </div>
 </div>
 
 			<div id="errorBox" class="error-box" style="display: none;"></div>
@@ -213,11 +213,12 @@
 				</div>
             <div id="rulesTab" class="tabcontent" style="display: block;">
                 <h3>Comandos para CGNAT MikroTik</h3>
-                <textarea id="rulesOutput" readonly></textarea>
-                <div class="button-group">
+				<div class="button-group">
                     <button onclick="copyToClipboard('rulesOutput')">Copiar Regras</button>
                     <button class="button-secondary" onclick="downloadRules()">Baixar Regras como TXT</button>
                 </div>
+                <textarea id="rulesOutput" readonly></textarea>
+                
             </div>
             <div id="subnetMappingTab" class="tabcontent">
                 <h3>Mapeamento por Sub-Rede</h3>
@@ -225,31 +226,31 @@
             </div>
             <div id="perIPTab" class="tabcontent">
                 <h3>Mapeamento por IP</h3>
-                <div class="svg-container" id="perIPSvgContainer"></div>
-                <div class="button-group">
+				<div class="button-group">
                     <button onclick="downloadPerIPMapping()">Baixar Mapeamento por IP</button>
                 </div>
-				
-            </div>
+                <div class="svg-container" id="perIPSvgContainer"></div>
+                
+			</div>
 			<div id="bngHuaweiTab" class="tabcontent">
 				<h3>Comandos para BNG Huawei</h3>
-				<textarea id="bngHuaweiOutput" readonly></textarea>
 				<div class="button-group">
 					<button onclick="copyToClipboard('bngHuaweiOutput')">Copiar Comandos</button>
 					<button class="button-secondary" onclick="downloadBNGCommands()">Baixar Comandos como TXT</button>
 				</div>
+				<textarea id="bngHuaweiOutput" readonly></textarea>
 			</div>
         </div></div>
     </div>
     <script>
 	/**
  * Autor: Bruno Mendes dos Santos
- * Data de Criação: 2025-04-16
+ * Data de Criação: 2025-04-22
  * Descrição: Funções para Geração de regras CGNAT para Mirktoik e relatório de mapeamento
  *
  * Última Modificação por: Bruno Mendes dos Santos
  * e-mail:oryon.br@gmail.com
- * Data da Última Modificação: 2025-04-16
+ * Data da Última Modificação: 2025-04-22
  */
         // Variáveis globais
         let mappingData = [];
